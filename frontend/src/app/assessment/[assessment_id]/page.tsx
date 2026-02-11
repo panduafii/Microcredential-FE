@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import type { Question, QuestionOption } from "@/types/api";
 import { ArrowLeft, ArrowRight, BadgeCheck, Clock, Loader2, LogOut, ShieldAlert, Sparkles } from "lucide-react";
@@ -172,7 +172,13 @@ export default function AssessmentPage() {
           router.replace(`/assessment/${assessmentId}/result`);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 410) {
+          localStorage.removeItem(`assessment_${assessmentId}`);
+          localStorage.removeItem(`answers_${assessmentId}`);
+          setError("Assessment sudah tidak tersedia. Silakan mulai ulang dari halaman utama.");
+          return;
+        }
         // biarkan user lanjut, mungkin status endpoint belum tersedia
       })
       .finally(() => setLoading(false));
@@ -328,6 +334,12 @@ export default function AssessmentPage() {
       localStorage.removeItem(`answers_${assessmentId}`);
       router.push(`/assessment/${assessmentId}/processing`);
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 410) {
+        localStorage.removeItem(`assessment_${assessmentId}`);
+        localStorage.removeItem(`answers_${assessmentId}`);
+        setError("Assessment sudah tidak tersedia. Silakan mulai ulang dari halaman utama.");
+        return;
+      }
       const message = err instanceof Error ? err.message : "Gagal submit assessment";
       setError(message);
     } finally {
