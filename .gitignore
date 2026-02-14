@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Local env
+.env
+.env.local
+
+# Build/cache artifacts
+frontend/.next/
+frontend/out/
+frontend/coverage/
