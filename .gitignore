@@ -51,6 +51,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# frontend docs (optional local references)
-frontend/SHADCN_SETUP.md
-frontend/FE-GUIDE.md
+# local docs and BMAD references
+.bmad-core/
+docs/
