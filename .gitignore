@@ -5,14 +5,52 @@
 .vscode/
 .idea/
 
-# Logs
+# dependencies
+/node_modules
+/frontend/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+/frontend/coverage
+
+# next.js
+/.next/
+/out/
+/frontend/.next/
+/frontend/out/
+
+# production
+/build
+
+# misc
+*.pem
+
+# debug
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Local env
-.env
-.env.local
+# env files
+.env*
+!.env.example
+!frontend/.env.example
 
-# Build/cache artifacts
-frontend/.next/
-frontend/out/
-frontend/coverage/
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# frontend docs (optional local references)
+frontend/SHADCN_SETUP.md
+frontend/FE-GUIDE.md

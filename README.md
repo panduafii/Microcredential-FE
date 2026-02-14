@@ -1,13 +1,13 @@
 # MicroCred FE
 
-Frontend repository for MicroCred platform.
+Frontend repository for the MicroCred platform.
 
 ## Stack
 - Next.js (App Router + TypeScript)
 - Tailwind CSS
 - ESLint
 
-Codebase lives in `frontend/`.
+Primary app code lives in `frontend/`.
 
 ## Branching Model
 - `main`: production-ready branch
@@ -23,7 +23,7 @@ Recommended flow:
 ## Backend Integration
 Backend is already live on Render.
 
-Set FE env:
+Set FE environment variable:
 - `NEXT_PUBLIC_API_URL=https://<your-backend-render-domain>`
 
 See `frontend/.env.example`.
@@ -42,15 +42,6 @@ npm run lint
 npm run build
 ```
 
-## GitHub Setup (First Time)
-This repo is local-first and can be linked to a new GitHub repo:
-
-```bash
-git remote add origin git@github.com:<your-username>/<your-fe-repo>.git
-git push -u origin main
-git push -u origin develop
-```
-
 ## CI
 GitHub Actions workflow:
 - `.github/workflows/frontend-ci.yml`
@@ -59,3 +50,8 @@ Runs on push/PR:
 - `npm ci`
 - `npm run lint`
 - `npm run build`
+
+## Notes
+- API integration helper lives in `frontend/src/lib/api.ts`.
+- Data contracts live in `frontend/src/types/api.ts`.
+- FE guides live in `docs/`.
