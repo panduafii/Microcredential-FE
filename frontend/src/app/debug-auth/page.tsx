@@ -56,12 +56,12 @@ export default function DebugAuth() {
     });
 
     if (removed.length === 0) {
-      setResult("✅ Tidak ada cache assessment yang ditemukan.");
+      setResult("✅ No assessment cache found.");
       return;
     }
 
     setResult(
-      "✅ Cache assessment dihapus:\n" + JSON.stringify(removed, null, 2),
+      "✅ Assessment cache cleared:\n" + JSON.stringify(removed, null, 2),
     );
   };
 

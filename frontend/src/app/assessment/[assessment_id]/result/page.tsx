@@ -118,13 +118,13 @@ export default function ResultPage() {
       .catch((err: unknown) => {
         if (err instanceof ApiError) {
           if (err.status === 410) {
-            setError("Assessment sudah tidak tersedia atau telah expired.");
+            setError("Assessment is no longer available or has expired.");
             return;
           }
 
-          // Result belum siap - kembali ke halaman processing
+          // Result is not ready yet - return to processing page
           if (err.status === 503 || err.status === 409) {
-            setError("Hasil assessment belum siap. Mengembalikan ke halaman proses...");
+            setError("Assessment result is not ready yet. Redirecting to processing page...");
             window.setTimeout(() => {
               router.replace(`/assessment/${assessmentId}/processing`);
             }, 1200);
@@ -132,7 +132,7 @@ export default function ResultPage() {
           }
         }
 
-        setError(err instanceof Error ? err.message : "Gagal memuat hasil");
+        setError(err instanceof Error ? err.message : "Failed to load results");
       })
       .finally(() => setLoading(false));
   }, [assessmentId, router]);
@@ -203,7 +203,7 @@ export default function ResultPage() {
       );
       setFeedbackSent(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Gagal mengirim feedback";
+      const message = err instanceof Error ? err.message : "Failed to send feedback";
       setError(message);
     } finally {
       setSendingFeedback(false);
@@ -214,7 +214,7 @@ export default function ResultPage() {
     const token = getAccessToken();
     if (!token) {
       setEmailToast({
-        message: "Anda harus login untuk mengirim email.",
+        message: "You must be logged in to send email.",
         variant: "error",
       });
       return;
@@ -222,7 +222,7 @@ export default function ResultPage() {
 
     if (!result?.assessment_id) {
       setEmailToast({
-        message: "Assessment tidak ditemukan.",
+        message: "Assessment not found.",
         variant: "error",
       });
       return;
@@ -251,15 +251,15 @@ export default function ResultPage() {
       }
 
       if (!response.ok) {
-        let message = "Terjadi kesalahan. Silakan coba lagi.";
+        let message = "An error occurred. Please try again.";
         if (response.status === 409) {
-          message = "Hasil belum siap, coba beberapa saat lagi";
+          message = "Result is not ready yet, please try again shortly";
         } else if (response.status === 400) {
-          message = "Email user tidak tersedia";
+          message = "User email is not available";
         } else if (response.status === 403 || response.status === 404) {
-          message = "Tidak punya akses / assessment tidak ditemukan";
+          message = "No access / assessment not found";
         } else if (response.status === 502) {
-          message = "Gagal mengirim email, coba lagi";
+          message = "Failed to send email, please try again";
         }
         setEmailToast({ message, variant: "error" });
         return;
@@ -272,11 +272,11 @@ export default function ResultPage() {
         sent_at: string;
       };
       setEmailToast({
-        message: `Email terkirim ke ${data.to_email}`,
+        message: `Email sent to ${data.to_email}`,
         variant: "success",
       });
     } catch {
-      const message = "Terjadi kesalahan. Silakan coba lagi.";
+      const message = "An error occurred. Please try again.";
       setEmailToast({ message, variant: "error" });
     } finally {
       setSendingEmail(false);
@@ -310,7 +310,7 @@ if (error) {
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            Kembali ke halaman utama
+            Back to home page
           </button>
         </div>
       </main>
@@ -351,14 +351,14 @@ if (!result) return null;
           rel="noreferrer"
           className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-200 hover:text-blue-100"
         >
-          Lihat course
-          <ArrowLeft className="h-4 w-4 rotate-180" />
-        </a>
-      ) : (
-        <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
-          Course URL tidak tersedia
-        </span>
-      )}
+          View course
+            <ArrowLeft className="h-4 w-4 rotate-180" />
+          </a>
+        ) : (
+          <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+          Course URL not available
+          </span>
+        )}
     </div>
   );
 
@@ -379,10 +379,10 @@ if (!result) return null;
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <header className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-blue-900/40 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Assessment selesai</p>
-            <h1 className="text-3xl font-bold text-white">Hasil assessment kamu</h1>
+            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Assessment completed</p>
+            <h1 className="text-3xl font-bold text-white">Your assessment results</h1>
             <p className="text-sm text-slate-200">
-              Rangkuman GPT, skor breakdown, dan rekomendasi course dari RAG & Fusion Service.
+              GPT summary, score breakdown, and course recommendations from the RAG & Fusion service.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -390,7 +390,7 @@ if (!result) return null;
                 className="inline-flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-xs font-semibold text-slate-50 transition hover:bg-white/20"
               >
                 <Home className="h-4 w-4" />
-                Kembali ke Home
+                Back to Home
               </button>
               <button
                 onClick={handleSendToEmail}
@@ -400,12 +400,12 @@ if (!result) return null;
                 {sendingEmail ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Mengirim...
+                    Sending...
                   </>
                 ) : (
                   <>
                     <Mail className="h-4 w-4" />
-                    Kirim ke Email
+                    Send to Email
                   </>
                 )}
               </button>
@@ -456,19 +456,19 @@ if (!result) return null;
                   }}
                 />
               ) : (
-                <p className="text-sm text-slate-300">Tidak ada rangkuman tersedia.</p>
+                <p className="text-sm text-slate-300">No summary available.</p>
               )}
             </div>
           </div>
 
           <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-blue-900/30 backdrop-blur">
-            <h3 className="text-lg font-semibold text-white">Submit feedback</h3>
-            <p className="text-sm text-slate-200">
-              Bantu kami meningkatkan rekomendasi dengan memberi rating singkat.
-            </p>
+              <h3 className="text-lg font-semibold text-white">Submit feedback</h3>
+              <p className="text-sm text-slate-200">
+              Help us improve recommendations by giving a short rating.
+              </p>
             {feedbackSent ? (
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                Terima kasih! Feedback kamu sudah kami terima.
+                Thank you! Your feedback has been received.
               </div>
             ) : (
               <form className="space-y-3" onSubmit={handleFeedbackSubmit}>
@@ -509,7 +509,7 @@ if (!result) return null;
                   </label>
                 </div>
                 <label className="flex flex-col gap-1 text-sm font-semibold text-slate-100">
-                  Komentar
+                  Comment
                   <textarea
                     rows={3}
                     value={feedback.comment}
@@ -517,7 +517,7 @@ if (!result) return null;
                       setFeedback((prev) => ({ ...prev, comment: e.target.value }))
                     }
                     className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
-                    placeholder="Apa yang paling membantu atau kurang relevan?"
+                    placeholder="What was most helpful or less relevant?"
                   />
                 </label>
                 <button
@@ -528,11 +528,11 @@ if (!result) return null;
                   {sendingFeedback ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Mengirim...
+                      Sending...
                     </>
                   ) : (
                     <>
-                      Kirim feedback
+                      Send feedback
                       <Send className="h-4 w-4" />
                     </>
                   )}
@@ -550,7 +550,7 @@ if (!result) return null;
           {recommendationSplit.mode === "two-path" && (
             <div className="mb-5 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
               {recommendationSplit.note ||
-                "Target Path bersifat aspirational. Selesaikan Mandatory Foundation terlebih dahulu."}
+                "Target Path is aspirational. Complete Mandatory Foundation first."}
             </div>
           )}
 
@@ -561,7 +561,7 @@ if (!result) return null;
                   <div className="space-y-1">
                     <h4 className="text-base font-semibold text-white">Mandatory Foundation</h4>
                     <p className="text-xs text-slate-300">
-                      Selesaikan jalur ini dulu agar peluang sukses di topik target lebih tinggi.
+                      Complete this path first to increase your success chances in the target topic.
                     </p>
                   </div>
                   {recommendationSplit.mandatory.length ? (
@@ -570,7 +570,7 @@ if (!result) return null;
                     </div>
                   ) : (
                     <p className="text-sm text-slate-300">
-                      Belum ada course untuk jalur Mandatory Foundation.
+                      No courses yet for the Mandatory Foundation path.
                     </p>
                   )}
                 </div>
@@ -579,7 +579,7 @@ if (!result) return null;
                   <div className="space-y-1">
                     <h4 className="text-base font-semibold text-white">Target Path (Aspirational)</h4>
                     <p className="text-xs text-slate-300">
-                      Jalur minat Anda, disarankan setelah fondasi terpenuhi.
+                      Your interest path, recommended after the foundation is complete.
                     </p>
                   </div>
                   {recommendationSplit.target.length ? (
@@ -587,7 +587,7 @@ if (!result) return null;
                       {recommendationSplit.target.map(renderRecommendationCard)}
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-300">Belum ada course untuk Target Path.</p>
+                    <p className="text-sm text-slate-300">No courses yet for Target Path.</p>
                   )}
                 </div>
               </div>
@@ -597,7 +597,7 @@ if (!result) return null;
               </div>
             )
           ) : (
-            <p className="text-sm text-slate-300">Belum ada rekomendasi.</p>
+            <p className="text-sm text-slate-300">No recommendations yet.</p>
           )}
         </section>
       </div>

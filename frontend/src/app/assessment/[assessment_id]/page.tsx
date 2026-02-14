@@ -227,7 +227,7 @@ export default function AssessmentPage() {
             // Clear expired cache
             localStorage.removeItem(`assessment_${assessmentId}`);
             localStorage.removeItem(`answers_${assessmentId}`);
-            setError("Assessment sudah expired. Silakan mulai ulang dari halaman utama.");
+            setError("Assessment has expired. Please start a new assessment from the home page.");
             setLoading(false);
             return;
           }
@@ -267,11 +267,11 @@ export default function AssessmentPage() {
         console.log('[AssessmentPage] Cache loaded successfully');
       } catch (e) {
         console.log('[AssessmentPage] Cache parse error:', e);
-        setError("Gagal membaca data assessment lokal. Mulai ulang assessment.");
+        setError("Failed to read local assessment data. Please restart the assessment.");
       }
     } else {
       console.log('[AssessmentPage] No cache found, setting error');
-      setError("Data assessment tidak ditemukan. Mulai lagi dari halaman utama.");
+      setError("Assessment data was not found. Please start again from the home page.");
     }
 
     const savedAnswers = localStorage.getItem(`answers_${assessmentId}`);
@@ -285,7 +285,7 @@ export default function AssessmentPage() {
       }
     }
 
-    // Jika user refresh di tengah jalan, cek status untuk redirect otomatis
+    // If the user refreshes mid-session, check status for automatic redirect
     // Note: We IGNORE errors here - let user proceed with cached data
     console.log('[AssessmentPage] Calling status API...');
     api
@@ -314,7 +314,7 @@ export default function AssessmentPage() {
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = "Progress akan hilang. Keluar dari tes?";
+      e.returnValue = "Your progress will be lost. Leave this assessment?";
     };
 
     const handlePopState = () => {
@@ -357,7 +357,7 @@ export default function AssessmentPage() {
         });
         if (graceTime < 5 * 60 * 1000) {
           // Within grace period - show warning
-          setTimeRemaining("Waktu habis! Submitting...");
+          setTimeRemaining("Time is up! Submitting...");
         } else {
           // Grace period over - force submit (allow empty answers)
           console.log('[AssessmentPage] Timer triggering auto-submit (grace period exceeded)');
@@ -467,7 +467,7 @@ export default function AssessmentPage() {
   const handleNext = () => setCurrent((c) => Math.min(totalQuestions - 1, c + 1));
 
   const handleExit = async () => {
-    if (!window.confirm("Yakin ingin keluar? Progress akan hilang dan tidak bisa dikembalikan.")) return;
+    if (!window.confirm("Are you sure you want to exit? Your progress will be lost and cannot be recovered.")) return;
     
     setExiting(true);
     try {
@@ -476,7 +476,7 @@ export default function AssessmentPage() {
       localStorage.removeItem(`answers_${assessmentId}`);
       router.push("/");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Gagal keluar dari assessment";
+      const message = err instanceof Error ? err.message : "Failed to exit assessment";
       alert(message);
       setExiting(false);
     }
@@ -496,10 +496,10 @@ export default function AssessmentPage() {
       const unansweredQuestions = questions.filter((q) => !isQuestionAnswered(q, answers[q.id]));
       if (unansweredQuestions.length > 0) {
         const questionNumbers = unansweredQuestions.map(q => `Q${q.sequence}`).join(', ');
-        alert(`Mohon jawab semua soal terlebih dahulu!\n\nSoal yang belum dijawab: ${questionNumbers} (${unansweredQuestions.length} soal)`);
+        alert(`Please answer all questions first!\n\nUnanswered questions: ${questionNumbers} (${unansweredQuestions.length} questions)`);
         return;
       }
-      if (!window.confirm("Yakin ingin submit jawaban? Setelah submit tidak bisa diubah.")) return;
+      if (!window.confirm("Are you sure you want to submit your answers? After submission, they cannot be changed.")) return;
     }
     setSubmitting(true);
     setError(null);
@@ -548,10 +548,10 @@ export default function AssessmentPage() {
         localStorage.removeItem(`assessment_${assessmentId}`);
         localStorage.removeItem(`answers_${assessmentId}`);
         setQuestions([]); // Clear questions to prevent further attempts
-        setError("Assessment sudah tidak tersedia atau telah expired. Silakan mulai ulang dari halaman utama.");
+        setError("Assessment is no longer available or has expired. Please start a new assessment from the home page.");
         return;
       }
-      const message = err instanceof Error ? err.message : "Gagal submit assessment";
+      const message = err instanceof Error ? err.message : "Failed to submit assessment";
       console.log('[AssessmentPage] Setting error:', message);
       setError(message);
     } finally {
@@ -579,7 +579,7 @@ export default function AssessmentPage() {
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            Kembali ke halaman utama
+            Back to home page
           </button>
         </div>
       </main>
@@ -590,7 +590,7 @@ export default function AssessmentPage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-12">
         <div className="mx-auto rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 max-w-3xl">
-          Pertanyaan tidak ditemukan. Silakan mulai assessment lagi.
+          Question not found. Please start the assessment again.
         </div>
       </main>
     );
@@ -603,10 +603,10 @@ export default function AssessmentPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.15em] text-blue-300">Assessment</p>
           <h1 className="text-2xl font-bold text-white">
-            {role?.name || "Track"} — Question {current + 1} dari {totalQuestions}
+            {role?.name || "Track"} — Question {current + 1} of {totalQuestions}
           </h1>
           <p className="text-sm text-slate-300">
-            Jawaban disimpan otomatis di perangkat kamu. Submit setelah semua selesai.
+            Answers are automatically saved on your device. Submit after you finish all questions.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -616,11 +616,11 @@ export default function AssessmentPage() {
             className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
           >
             <LogOut className="h-4 w-4" />
-            {exiting ? "Keluar..." : "Keluar"}
+            {exiting ? "Exiting..." : "Exit"}
           </button>
           {timeRemaining && (
             <div className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold ${
-              timeRemaining.startsWith('Auto-submit') || timeRemaining.startsWith('Submitting') ? 'bg-red-500/20 text-red-300' :
+              timeRemaining.includes('Submitting') ? 'bg-red-500/20 text-red-300' :
               timeRemaining.split(':')[0] && parseInt(timeRemaining.split(':')[0]) < 5 ? 'bg-amber-500/20 text-amber-300' :
               'bg-blue-500/20 text-blue-300'
             }`}>
@@ -630,7 +630,7 @@ export default function AssessmentPage() {
           )}
           <div className="flex items-center gap-2 rounded-full bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-300">
             <BadgeCheck className="h-4 w-4" />
-            Auto-save aktif
+            Auto-save enabled
           </div>
         </div>
       </div>
@@ -694,13 +694,13 @@ export default function AssessmentPage() {
           <div className="space-y-2">
             <p className="text-lg font-semibold text-white">{currentQuestion.prompt}</p>
             <p className="text-sm text-slate-300">
-              Berikan jawaban sejelas mungkin. Kamu bisa kembali kapan saja sebelum submit.
+              Give the clearest answer possible. You can return anytime before submitting.
             </p>
           </div>
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300">
-              {isProjectChecklistProfile ? "Isi detail project" : currentIsTextAnswer ? "Jawaban kamu" : "Pilih jawaban"}
+              {isProjectChecklistProfile ? "Fill in project details" : currentIsTextAnswer ? "Your answer" : "Choose an answer"}
             </label>
             
             {/* Essay Question */}
@@ -710,11 +710,11 @@ export default function AssessmentPage() {
                   className="min-h-[160px] w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                   value={currentStringAnswer}
                   onChange={handleTextChange}
-                  placeholder="Tulis jawaban kamu di sini..."
+                  placeholder="Write your answer here..."
                 />
                 <p className="flex items-center gap-2 text-xs text-slate-400">
                   <Sparkles className="h-4 w-4 text-blue-400" />
-                  Jawaban tersimpan otomatis.
+                  Answer auto-saved.
                 </p>
               </>
             )}
@@ -727,7 +727,7 @@ export default function AssessmentPage() {
                 {/* Suggestion chips */}
                 {currentQuestion.expected_values.accepted_values && currentQuestion.expected_values.accepted_values.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-400">💡 Quick picks (klik untuk menambahkan):</p>
+                    <p className="text-xs text-slate-400">💡 Quick picks (click to add):</p>
                     <div className="flex flex-wrap gap-2">
                       {currentQuestion.expected_values.accepted_values.map((suggestion) => (
                         <button
@@ -753,17 +753,17 @@ export default function AssessmentPage() {
                 {/* Custom text input */}
                 <div className="space-y-1">
                   <label className="block text-xs font-medium text-slate-300">
-                    Teknologi/tools yang ingin dipelajari (pisahkan dengan koma):
+                    Technologies/tools you want to learn (separate with commas):
                   </label>
                   <textarea
                     className="min-h-[100px] w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                     value={currentStringAnswer}
                     onChange={handleTextChange}
-                    placeholder="Contoh: Docker, Kubernetes, GraphQL, Redis"
+                    placeholder="Example: Docker, Kubernetes, GraphQL, Redis"
                   />
                   <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 px-3 py-2 text-xs text-blue-200">
                     <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-400" />
-                    <span>Kamu bisa menambahkan teknologi custom yang tidak ada di suggestions. Jawaban tersimpan otomatis.</span>
+                    <span>You can add custom technologies that are not listed in suggestions. Answers are auto-saved.</span>
                   </div>
                 </div>
               </div>
@@ -778,11 +778,11 @@ export default function AssessmentPage() {
                     className="min-h-[160px] w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                     value={currentStringAnswer}
                     onChange={handleTextChange}
-                    placeholder="Tulis jawaban kamu di sini..."
+                    placeholder="Write your answer here..."
                   />
                   <p className="flex items-center gap-2 text-xs text-slate-400">
                     <Sparkles className="h-4 w-4 text-blue-400" />
-                    Jawaban tersimpan otomatis.
+                    Answer auto-saved.
                   </p>
                 </>
               )}
@@ -792,7 +792,7 @@ export default function AssessmentPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-slate-300">
-                    Total project yang pernah dikerjakan
+                    Total projects you have worked on
                   </label>
                   <input
                     type="number"
@@ -802,16 +802,16 @@ export default function AssessmentPage() {
                     className="w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                     value={currentProjectChecklistAnswer.project_count}
                     onChange={(e) => handleProjectCountChange(e.target.value)}
-                    placeholder="Contoh: 5"
+                    placeholder="Example: 5"
                   />
                   <p className="text-xs text-slate-400">
-                    Isi angka bulat 0 atau lebih.
+                    Enter a whole number 0 or higher.
                   </p>
                 </div>
 
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-slate-300">
-                    Pilih semua konteks project yang pernah kamu kerjakan (boleh lebih dari satu):
+                    Select all project contexts you have worked on (you may choose more than one):
                   </p>
                   <div className="space-y-2">
                     {currentQuestion.options.map((option) => {
@@ -842,7 +842,7 @@ export default function AssessmentPage() {
 
                 <p className="flex items-center gap-2 text-xs text-slate-400">
                   <Sparkles className="h-4 w-4 text-blue-400" />
-                  Input dan checklist tersimpan otomatis.
+                  Input and checklist are auto-saved.
                 </p>
               </div>
             )}
@@ -865,7 +865,7 @@ export default function AssessmentPage() {
                 ))}
                 <p className="flex items-center gap-2 text-xs text-slate-400">
                   <Sparkles className="h-4 w-4 text-blue-400" />
-                  Pilihan tersimpan otomatis.
+                  Selection auto-saved.
                 </p>
               </div>
             )}
@@ -873,7 +873,7 @@ export default function AssessmentPage() {
             {/* Fallback for malformed questions */}
             {!currentIsTextAnswer && !isOptionQuestion && !isProjectChecklistProfile && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                ⚠️ Format soal tidak valid. Silakan laporkan masalah ini.
+                ⚠️ Invalid question format. Please report this issue.
                 <pre className="mt-2 text-xs overflow-auto">
                   {JSON.stringify({ 
                     type: currentQuestion.question_type,
@@ -893,7 +893,7 @@ export default function AssessmentPage() {
               disabled={current === 0 || submitting}
             >
               <ArrowLeft className="h-4 w-4" />
-              Pertanyaan sebelumnya
+              Previous question
             </button>
             {current < totalQuestions - 1 ? (
               <button
@@ -901,7 +901,7 @@ export default function AssessmentPage() {
                 onClick={handleNext}
                 disabled={submitting}
               >
-                Pertanyaan berikutnya
+                Next question
                 <ArrowRight className="h-4 w-4" />
               </button>
             ) : (
@@ -913,7 +913,7 @@ export default function AssessmentPage() {
                 {submitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Mengirim jawaban...
+                    Submitting answers...
                   </>
                 ) : (
                   <>

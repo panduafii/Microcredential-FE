@@ -32,13 +32,13 @@ export default function RegisterPage() {
         full_name: fullName,
         role,
       });
-      // Auto-login setelah register using proper auth management
+      // Auto-login after register using proper auth management
       saveAuth(data.tokens, data.user);
       console.log("[Register] Success:", data.user.email);
       router.push("/");
     } catch (err: unknown) {
       console.error('Register error:', err);
-      let message = "Registrasi gagal";
+      let message = "Registration failed";
       if (err instanceof Error) {
         message = err.message;
       } else if (typeof err === 'string') {
@@ -64,21 +64,21 @@ export default function RegisterPage() {
             AI-Powered Assessment
           </div>
           <h1 className="text-3xl font-bold leading-tight sm:text-4xl">
-            Daftar dan mulai assessment sesuai track pilihanmu.
+            Create an account and start your assessment in your chosen track.
           </h1>
           <p className="text-sm text-slate-200 sm:text-base">
-            Satu akun untuk kerjakan tes, pantau progres, dan terima rekomendasi course yang
-            relevan dengan profilmu.
+            One account to take assessments, track progress, and get course recommendations
+            aligned with your profile.
           </p>
           <div className="flex flex-wrap gap-2 text-xs text-blue-100">
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              Skor GPT & RAG
+              GPT & RAG scoring
             </span>
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              Simpan jawaban otomatis
+              Auto-saved answers
             </span>
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              Hasil lengkap + feedback
+              Complete results + feedback
             </span>
           </div>
         </section>
@@ -93,13 +93,13 @@ export default function RegisterPage() {
                 <UserPlus className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Daftar</p>
-                <h2 className="text-lg font-semibold text-slate-50">Buat akun MicroCred</h2>
+                <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Sign up</p>
+                <h2 className="text-lg font-semibold text-slate-50">Create your MicroCred account</h2>
               </div>
             </div>
 
             {loading && (
-              <div className="loading-bar h-1 w-full rounded-full bg-white/20" aria-label="Memproses registrasi" />
+              <div className="loading-bar h-1 w-full rounded-full bg-white/20" aria-label="Processing registration" />
             )}
 
             {error && (
@@ -110,11 +110,11 @@ export default function RegisterPage() {
 
             <div className="space-y-3">
               <label className="block text-sm font-semibold text-slate-100">
-                Nama lengkap
+                Full name
                 <input
                   type="text"
                   className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
-                  placeholder="Nama lengkap"
+                  placeholder="Full name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
@@ -131,7 +131,7 @@ export default function RegisterPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
-                <p className="mt-1 text-xs text-slate-400">Gunakan email yang valid</p>
+                <p className="mt-1 text-xs text-slate-400">Use a valid email address</p>
               </label>
 
               <label className="block text-sm font-semibold text-slate-100">
@@ -150,12 +150,12 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition"
-                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">Minimal 8 karakter</p>
+                <p className="mt-1 text-xs text-slate-400">Minimum 8 characters</p>
               </label>
 
               <label className="block text-sm font-semibold text-slate-100">
@@ -181,16 +181,16 @@ export default function RegisterPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Sedang memproses...
+                    Processing...
                   </>
                 ) : (
-                  "Daftar"
+                  "Sign up"
                 )}
               </button>
               <p className="text-center text-xs text-slate-300">
-                Sudah punya akun?{" "}
+                Already have an account?{" "}
                 <a href="/login" className="font-semibold text-blue-200 hover:text-blue-100">
-                  Login
+                  Sign in
                 </a>
               </p>
             </div>

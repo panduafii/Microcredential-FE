@@ -32,7 +32,7 @@ export default function LoginPage() {
       console.log("[Login] Success:", data.user.email);
       router.push("/");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Login gagal";
+      const message = err instanceof Error ? err.message : "Login failed";
       setError(message);
     } finally {
       setLoading(false);
@@ -53,20 +53,20 @@ export default function LoginPage() {
             MicroCred
           </div>
           <h1 className="text-3xl font-bold leading-tight sm:text-4xl">
-            Temukan potensimu, raih skill yang tepat.
+            Discover your potential and build the right skills.
           </h1>
           <p className="text-sm text-slate-200 sm:text-base">
-            Assessment cerdas yang memahami kemampuanmu dan merekomendasikan course terbaik untuk karirmu.
+            Smart assessments that understand your strengths and recommend the best courses for your career.
           </p>
           <div className="flex flex-wrap gap-2 text-xs text-blue-100">
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              Dibuat sesuai dengan personal kamu
+              Built around your profile
             </span>
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              Hasil test bisa ditunggu
+              Fast results while you wait
             </span>
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-              Tersedia berbagai role
+              Multiple role tracks available
             </span>
           </div>
         </section>
@@ -81,13 +81,13 @@ export default function LoginPage() {
                 <LockKeyhole className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Masuk</p>
-                <h2 className="text-lg font-semibold text-slate-50">Gunakan akun MicroCred</h2>
+                <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Sign in</p>
+                <h2 className="text-lg font-semibold text-slate-50">Use your MicroCred account</h2>
               </div>
             </div>
 
             {loading && (
-              <div className="loading-bar h-1 w-full rounded-full bg-white/20" aria-label="Memproses login" />
+              <div className="loading-bar h-1 w-full rounded-full bg-white/20" aria-label="Processing sign in" />
             )}
 
             {error && <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-100">{error}</div>}
@@ -120,7 +120,7 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition"
-                    aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -137,16 +137,16 @@ export default function LoginPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Sedang memproses...
+                    Processing...
                   </>
                 ) : (
-                  "Login"
+                  "Sign in"
                 )}
               </button>
               <p className="text-center text-xs text-slate-300">
-                Belum punya akun?{" "}
+                Don&apos;t have an account?{" "}
                 <a href="/register" className="font-semibold text-blue-200 hover:text-blue-100">
-                  Daftar dulu
+                  Sign up
                 </a>
               </p>
             </div>

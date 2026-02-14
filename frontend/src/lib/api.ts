@@ -44,7 +44,7 @@ export async function apiRequest<T>(
     console.log('[API] Pre-flight check for:', endpoint);
     if (!checkAssessmentValidity(assessmentId)) {
       console.log('[API] Pre-flight check FAILED - throwing 410');
-      throw new ApiError(410, "Assessment telah expired. Silakan mulai assessment baru.");
+      throw new ApiError(410, "Assessment has expired. Please start a new assessment.");
     }
     console.log('[API] Pre-flight check PASSED');
   }
@@ -107,7 +107,7 @@ export async function apiRequest<T>(
         // For login/register, 401 means wrong credentials - don't clear auth
         console.log('[API] 401 on auth endpoint - wrong credentials');
         const errorData = await response.json().catch(() => ({}));
-        const message = errorData.detail || "Email atau password salah";
+        const message = errorData.detail || "Invalid email or password";
         throw new ApiError(401, message);
       }
       
@@ -139,7 +139,7 @@ export async function apiRequest<T>(
       // DON'T auto-redirect here - let the page component handle the UX
       // This prevents redirect loops and allows proper error display
       
-      throw new ApiError(410, "Sesi assessment telah berakhir. Silakan mulai assessment baru.");
+      throw new ApiError(410, "Assessment session has ended. Please start a new assessment.");
     }
 
     if (!response.ok) {

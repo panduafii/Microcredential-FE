@@ -227,14 +227,14 @@ export function shouldShowExpiryWarning(): boolean {
 }
 
 /**
- * Get formatted remaining time (e.g., "5 menit", "1 menit")
+ * Get formatted remaining time (e.g., "5 minutes", "1 minute")
  */
 export function getFormattedRemainingTime(): string {
   const session = getAssessmentSession();
   if (!session || !session.expiresAt) return "";
   
   const remaining = getRemainingMinutes(session.expiresAt);
-  if (remaining <= 0) return "Waktu habis";
+  if (remaining <= 0) return "Time is up";
   
-  return `${remaining} menit`;
+  return `${remaining} minute${remaining === 1 ? "" : "s"}`;
 }
