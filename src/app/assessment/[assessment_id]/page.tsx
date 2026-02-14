@@ -18,6 +18,61 @@ interface AssessmentStatus {
   status?: string;
 }
 
+interface ProjectChecklistAnswer {
+  project_count: string;
+  selected_options: string[];
+}
+
+type AnswerValue = string | ProjectChecklistAnswer;
+
+interface SubmitResponsePayload {
+  question_id: string;
+  answer_text: string | null;
+  selected_option_id: string | null;
+  value?: string;
+  project_count?: number;
+  selected_options?: string[];
+}
+
+function isProjectChecklistAnswer(value: unknown): value is ProjectChecklistAnswer {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as { project_count?: unknown; selected_options?: unknown };
+  return (
+    typeof candidate.project_count === "string" &&
+    Array.isArray(candidate.selected_options) &&
+    candidate.selected_options.every((option) => typeof option === "string")
+  );
+}
+
+function isProjectChecklistQuestion(question: Question): boolean {
+  return question.question_type === "profile" && question.expected_values?.type === "project_checklist";
+}
+
+function getStringAnswer(answer: AnswerValue | undefined): string {
+  return typeof answer === "string" ? answer : "";
+}
+
+function getProjectChecklistAnswer(answer: AnswerValue | undefined): ProjectChecklistAnswer {
+  if (isProjectChecklistAnswer(answer)) {
+    return {
+      project_count: answer.project_count,
+      selected_options: [...answer.selected_options],
+    };
+  }
+
+  return { project_count: "", selected_options: [] };
+}
+
+function parseProjectCount(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return null;
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
 function normalizeOptions(options: unknown): QuestionOption[] | undefined {
   if (!options) return undefined;
 
@@ -85,6 +140,7 @@ function hasSelectableOptions(question: Question): boolean {
 
 function isTextAnswerQuestion(question: Question): boolean {
   if (question.question_type === "essay") return true;
+  if (isProjectChecklistQuestion(question)) return false;
 
   if (question.question_type === "theoretical") {
     return !hasSelectableOptions(question);
@@ -98,6 +154,19 @@ function isTextAnswerQuestion(question: Question): boolean {
   return false;
 }
 
+function isQuestionAnswered(question: Question, answer: AnswerValue | undefined): boolean {
+  if (isProjectChecklistQuestion(question)) {
+    const structured = getProjectChecklistAnswer(answer);
+    return parseProjectCount(structured.project_count) !== null && structured.selected_options.length > 0;
+  }
+
+  if (isTextAnswerQuestion(question)) {
+    return getStringAnswer(answer).trim().length > 0;
+  }
+
+  return getStringAnswer(answer).trim().length > 0;
+}
+
 export default function AssessmentPage() {
   const params = useParams<{ assessment_id: string }>();
   const router = useRouter();
@@ -108,7 +177,7 @@ export default function AssessmentPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [role, setRole] = useState<AssessmentCache["role"]>();
   const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -206,7 +275,15 @@ export default function AssessmentPage() {
     }
 
     const savedAnswers = localStorage.getItem(`answers_${assessmentId}`);
-    if (savedAnswers) setAnswers(JSON.parse(savedAnswers));
+    if (savedAnswers) {
+      try {
+        const parsedAnswers = JSON.parse(savedAnswers) as Record<string, AnswerValue>;
+        setAnswers(parsedAnswers);
+      } catch (e) {
+        console.log("[AssessmentPage] Saved answers parse error, clearing cache:", e);
+        localStorage.removeItem(`answers_${assessmentId}`);
+      }
+    }
 
     // Jika user refresh di tengah jalan, cek status untuk redirect otomatis
     // Note: We IGNORE errors here - let user proceed with cached data
@@ -322,24 +399,68 @@ export default function AssessmentPage() {
   const currentQuestion = questions[current];
   const currentHasOptions = currentQuestion ? hasSelectableOptions(currentQuestion) : false;
   const currentIsTextAnswer = currentQuestion ? isTextAnswerQuestion(currentQuestion) : false;
+  const isProjectChecklistProfile = currentQuestion ? isProjectChecklistQuestion(currentQuestion) : false;
   const isCustomProfile =
     currentQuestion?.question_type === "profile" &&
-    currentQuestion.expected_values?.allow_custom;
+    currentQuestion.expected_values?.allow_custom &&
+    !isProjectChecklistProfile;
   const isOptionQuestion =
     !!currentQuestion &&
+    !isProjectChecklistProfile &&
     !currentIsTextAnswer &&
     (currentQuestion.question_type === "theoretical" ||
       currentQuestion.question_type === "profile") &&
     currentHasOptions;
+  const currentStringAnswer = currentQuestion ? getStringAnswer(answers[currentQuestion.id]) : "";
+  const currentProjectChecklistAnswer =
+    currentQuestion && isProjectChecklistProfile
+      ? getProjectChecklistAnswer(answers[currentQuestion.id])
+      : null;
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!currentQuestion) return;
-    setAnswers({ ...answers, [currentQuestion.id]: e.target.value });
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: e.target.value }));
   };
 
   const handleOptionSelect = (optionId: string) => {
     if (!currentQuestion) return;
-    setAnswers({ ...answers, [currentQuestion.id]: optionId });
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionId }));
+  };
+
+  const handleProjectCountChange = (value: string) => {
+    if (!currentQuestion || !isProjectChecklistQuestion(currentQuestion)) return;
+    if (value && !/^\d+$/.test(value)) return;
+
+    setAnswers((prev) => {
+      const existing = getProjectChecklistAnswer(prev[currentQuestion.id]);
+      return {
+        ...prev,
+        [currentQuestion.id]: {
+          ...existing,
+          project_count: value,
+        },
+      };
+    });
+  };
+
+  const toggleProjectChecklistOption = (optionId: string) => {
+    if (!currentQuestion || !isProjectChecklistQuestion(currentQuestion)) return;
+
+    setAnswers((prev) => {
+      const existing = getProjectChecklistAnswer(prev[currentQuestion.id]);
+      const alreadySelected = existing.selected_options.includes(optionId);
+      const selected_options = alreadySelected
+        ? existing.selected_options.filter((id) => id !== optionId)
+        : [...existing.selected_options, optionId];
+
+      return {
+        ...prev,
+        [currentQuestion.id]: {
+          ...existing,
+          selected_options,
+        },
+      };
+    });
   };
 
   const handlePrev = () => setCurrent((c) => Math.max(0, c - 1));
@@ -372,7 +493,7 @@ export default function AssessmentPage() {
 
     // Check if all questions are answered (unless auto-submit)
     if (!isAutoSubmit) {
-      const unansweredQuestions = questions.filter(q => !answers[q.id]);
+      const unansweredQuestions = questions.filter((q) => !isQuestionAnswered(q, answers[q.id]));
       if (unansweredQuestions.length > 0) {
         const questionNumbers = unansweredQuestions.map(q => `Q${q.sequence}`).join(', ');
         alert(`Mohon jawab semua soal terlebih dahulu!\n\nSoal yang belum dijawab: ${questionNumbers} (${unansweredQuestions.length} soal)`);
@@ -384,13 +505,27 @@ export default function AssessmentPage() {
     setError(null);
     try {
       console.log('[AssessmentPage] Preparing submit payload...');
-      const responses = questions.map((question) => {
+      const responses: SubmitResponsePayload[] = questions.map((question) => {
         const answer = answers[question.id];
+
+        if (isProjectChecklistQuestion(question)) {
+          const structured = getProjectChecklistAnswer(answer);
+          const parsedProjectCount = parseProjectCount(structured.project_count);
+
+          return {
+            question_id: question.id,
+            answer_text: structured.project_count || null,
+            selected_option_id: null,
+            value: structured.project_count || "",
+            project_count: parsedProjectCount ?? 0,
+            selected_options: structured.selected_options,
+          };
+        }
 
         if (isTextAnswerQuestion(question)) {
           return {
             question_id: question.id,
-            answer_text: answer || "",
+            answer_text: getStringAnswer(answer),
             selected_option_id: null,
           };
         }
@@ -398,7 +533,7 @@ export default function AssessmentPage() {
         return {
           question_id: question.id,
           answer_text: null,
-          selected_option_id: answer || null,
+          selected_option_id: getStringAnswer(answer) || null,
         };
       });
       console.log('[AssessmentPage] Calling submit API...');
@@ -516,7 +651,7 @@ export default function AssessmentPage() {
           </div>
           <div className="space-y-1 text-xs text-slate-300">
             {questions.map((question, index) => {
-              const isAnswered = !!answers[question.id];
+              const isAnswered = isQuestionAnswered(question, answers[question.id]);
               const isCurrent = index === current;
               return (
               <button
@@ -565,7 +700,7 @@ export default function AssessmentPage() {
 
           <div className="space-y-2">
             <label className="text-xs font-semibold text-slate-300">
-              {currentIsTextAnswer ? "Jawaban kamu" : "Pilih jawaban"}
+              {isProjectChecklistProfile ? "Isi detail project" : currentIsTextAnswer ? "Jawaban kamu" : "Pilih jawaban"}
             </label>
             
             {/* Essay Question */}
@@ -573,7 +708,7 @@ export default function AssessmentPage() {
               <>
                 <textarea
                   className="min-h-[160px] w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
-                  value={answers[currentQuestion.id] || ""}
+                  value={currentStringAnswer}
                   onChange={handleTextChange}
                   placeholder="Tulis jawaban kamu di sini..."
                 />
@@ -587,7 +722,7 @@ export default function AssessmentPage() {
             {/* Profile Question with Custom Input (Q8 - Tech Preferences) */}
             {currentQuestion.question_type === 'profile' && 
              currentQuestion.expected_values?.allow_custom && 
-             currentQuestion.expected_values?.type !== 'compound' && (
+             !isProjectChecklistProfile && (
               <div className="space-y-4">
                 {/* Suggestion chips */}
                 {currentQuestion.expected_values.accepted_values && currentQuestion.expected_values.accepted_values.length > 0 && (
@@ -599,11 +734,11 @@ export default function AssessmentPage() {
                           key={suggestion}
                           type="button"
                           onClick={() => {
-                            const current = answers[currentQuestion.id] || "";
+                            const current = currentStringAnswer;
                             const items = current ? current.split(',').map(v => v.trim()) : [];
                             if (!items.includes(suggestion)) {
                               const updated = [...items, suggestion].filter(Boolean).join(', ');
-                              setAnswers({ ...answers, [currentQuestion.id]: updated });
+                              setAnswers((prev) => ({ ...prev, [currentQuestion.id]: updated }));
                             }
                           }}
                           className="rounded-full bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-200 transition hover:bg-blue-500/30 hover:text-blue-100"
@@ -622,7 +757,7 @@ export default function AssessmentPage() {
                   </label>
                   <textarea
                     className="min-h-[100px] w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
-                    value={answers[currentQuestion.id] || ""}
+                    value={currentStringAnswer}
                     onChange={handleTextChange}
                     placeholder="Contoh: Docker, Kubernetes, GraphQL, Redis"
                   />
@@ -641,7 +776,7 @@ export default function AssessmentPage() {
                 <>
                   <textarea
                     className="min-h-[160px] w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
-                    value={answers[currentQuestion.id] || ""}
+                    value={currentStringAnswer}
                     onChange={handleTextChange}
                     placeholder="Tulis jawaban kamu di sini..."
                   />
@@ -651,6 +786,66 @@ export default function AssessmentPage() {
                   </p>
                 </>
               )}
+
+            {/* Q7 Project Count + Checklist */}
+            {isProjectChecklistProfile && currentQuestion.options && currentProjectChecklistAnswer && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-300">
+                    Total project yang pernah dikerjakan
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    className="w-full rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-slate-50 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                    value={currentProjectChecklistAnswer.project_count}
+                    onChange={(e) => handleProjectCountChange(e.target.value)}
+                    placeholder="Contoh: 5"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Isi angka bulat 0 atau lebih.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-slate-300">
+                    Pilih semua konteks project yang pernah kamu kerjakan (boleh lebih dari satu):
+                  </p>
+                  <div className="space-y-2">
+                    {currentQuestion.options.map((option) => {
+                      const checked = currentProjectChecklistAnswer.selected_options.includes(option.id);
+                      return (
+                        <label
+                          key={option.id}
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition ${
+                            checked
+                              ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                              : "border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProjectChecklistOption(option.id)}
+                            className="mt-1 h-4 w-4 rounded border-white/30 bg-transparent text-blue-500"
+                          />
+                          <span>
+                            <span className="font-semibold">{option.id}</span>: {option.text}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <p className="flex items-center gap-2 text-xs text-slate-400">
+                  <Sparkles className="h-4 w-4 text-blue-400" />
+                  Input dan checklist tersimpan otomatis.
+                </p>
+              </div>
+            )}
             
             {/* Regular Profile & Theoretical Questions (Multiple Choice) */}
             {isOptionQuestion && currentQuestion.options && (
@@ -660,7 +855,7 @@ export default function AssessmentPage() {
                     key={option.id}
                     onClick={() => handleOptionSelect(option.id)}
                     className={`w-full rounded-xl border p-4 text-left text-sm transition ${
-                      answers[currentQuestion.id] === option.id
+                      currentStringAnswer === option.id
                         ? 'border-blue-500 bg-blue-500/20 text-blue-100'
                         : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10'
                     }`}
@@ -676,7 +871,7 @@ export default function AssessmentPage() {
             )}
 
             {/* Fallback for malformed questions */}
-            {!currentIsTextAnswer && !isOptionQuestion && (
+            {!currentIsTextAnswer && !isOptionQuestion && !isProjectChecklistProfile && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
                 ⚠️ Format soal tidak valid. Silakan laporkan masalah ini.
                 <pre className="mt-2 text-xs overflow-auto">
@@ -684,7 +879,7 @@ export default function AssessmentPage() {
                     type: currentQuestion.question_type,
                     hasOptions: !!currentQuestion.options,
                     optionsType: typeof currentQuestion.options,
-                    hasCompound: currentQuestion.expected_values?.type === 'compound'
+                    expectedType: currentQuestion.expected_values?.type
                   }, null, 2)}
                 </pre>
               </div>

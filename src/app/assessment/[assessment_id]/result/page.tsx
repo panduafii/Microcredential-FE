@@ -1,9 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { getAccessToken, isAuthenticated } from "@/lib/auth";
-import type { Recommendation, ScoreBreakdown } from "@/types/api";
+import type {
+  LearningPathKey,
+  LearningPathsTrace,
+  RagTraces,
+  Recommendation,
+  ScoreBreakdown,
+} from "@/types/api";
 import { ArrowLeft, BookOpen, CheckCircle2, Home, Loader2, Mail, Send, Sparkles, TrendingUp } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -15,7 +21,50 @@ interface ResultResponse {
   overall_score: number;
   score_breakdown: ScoreBreakdown;
   recommendations: Recommendation[];
+  rag_traces?: RagTraces | null;
   completed_at?: string;
+}
+
+interface RecommendationSplit {
+  mode: "single-path" | "two-path";
+  mandatory: Recommendation[];
+  target: Recommendation[];
+  note?: string;
+}
+
+function splitRecommendationPaths(
+  recommendations: Recommendation[],
+  learningPaths?: LearningPathsTrace | null,
+): RecommendationSplit {
+  const mode = learningPaths?.mode ?? "single-path";
+
+  const mandatory: Recommendation[] = [];
+  const target: Recommendation[] = [];
+
+  for (const item of recommendations) {
+    const path: LearningPathKey = item.metadata?.learning_path ?? "target_path";
+    if (path === "mandatory_foundation") {
+      mandatory.push(item);
+    } else {
+      target.push(item);
+    }
+  }
+
+  if (mode === "single-path") {
+    return {
+      mode,
+      mandatory: [],
+      target: recommendations,
+      note: learningPaths?.note,
+    };
+  }
+
+  return {
+    mode,
+    mandatory,
+    target,
+    note: learningPaths?.note,
+  };
 }
 
 export default function ResultPage() {
@@ -234,6 +283,15 @@ export default function ResultPage() {
     }
   };
 
+  const recommendationSplit = useMemo(
+    () =>
+      splitRecommendationPaths(
+        result?.recommendations ?? [],
+        result?.rag_traces?.readiness?.learning_paths,
+      ),
+    [result?.recommendations, result?.rag_traces?.readiness?.learning_paths],
+  );
+
   if (loading) {
     return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-12">
@@ -266,6 +324,43 @@ if (!result) return null;
     { label: "Theoretical", value: breakdown.theoretical.percentage },
     { label: "Essay", value: breakdown.essay.percentage },
   ];
+
+  const renderRecommendationCard = (rec: Recommendation) => (
+    <div
+      key={rec.course_id}
+      className="flex h-full flex-col justify-between rounded-xl border border-white/10 bg-white/5 p-4 text-slate-50"
+    >
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+          <span>Rank #{rec.rank}</span>
+          <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-100">
+            {Math.round(rec.relevance_score * 100)}% match
+          </span>
+        </div>
+        <h4 className="text-lg font-semibold text-white">{rec.course_title}</h4>
+        <p className="text-xs text-slate-300">{rec.match_reason || "-"}</p>
+        <div className="text-xs text-slate-400">
+          Level: {rec.metadata?.level || "-"} • {rec.metadata?.num_reviews || "0"} reviews •{" "}
+          {rec.metadata?.num_subscribers || "0"} enrolled
+        </div>
+      </div>
+      {rec.course_url ? (
+        <a
+          href={rec.course_url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-200 hover:text-blue-100"
+        >
+          Lihat course
+          <ArrowLeft className="h-4 w-4 rotate-180" />
+        </a>
+      ) : (
+        <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-500">
+          Course URL tidak tersedia
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 py-12 text-slate-50">
@@ -452,41 +547,55 @@ if (!result) return null;
             <BookOpen className="h-5 w-5 text-blue-200" />
             <h3 className="text-lg font-semibold">Recommended Courses</h3>
           </div>
-          {result.recommendations?.length ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {result.recommendations.map((rec) => (
-                <div
-                  key={rec.course_id}
-                  className="flex h-full flex-col justify-between rounded-xl border border-white/10 bg-white/5 p-4 text-slate-50"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-                      <span>Rank #{rec.rank}</span>
-                      <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-100">
-                        {Math.round(rec.relevance_score * 100)}% match
-                      </span>
-                    </div>
-                    <h4 className="text-lg font-semibold text-white">
-                      {rec.course_title}
-                    </h4>
-                    <p className="text-xs text-slate-300">{rec.match_reason}</p>
-                    <div className="text-xs text-slate-400">
-                      Level: {rec.metadata.level} • {rec.metadata.num_reviews} reviews •{" "}
-                      {rec.metadata.num_subscribers} enrolled
-                    </div>
-                  </div>
-                  <a
-                    href={rec.course_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-200 hover:text-blue-100"
-                  >
-                    Lihat course
-                    <ArrowLeft className="h-4 w-4 rotate-180" />
-                  </a>
-                </div>
-              ))}
+          {recommendationSplit.mode === "two-path" && (
+            <div className="mb-5 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+              {recommendationSplit.note ||
+                "Target Path bersifat aspirational. Selesaikan Mandatory Foundation terlebih dahulu."}
             </div>
+          )}
+
+          {result.recommendations?.length ? (
+            recommendationSplit.mode === "two-path" ? (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <h4 className="text-base font-semibold text-white">Mandatory Foundation</h4>
+                    <p className="text-xs text-slate-300">
+                      Selesaikan jalur ini dulu agar peluang sukses di topik target lebih tinggi.
+                    </p>
+                  </div>
+                  {recommendationSplit.mandatory.length ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {recommendationSplit.mandatory.map(renderRecommendationCard)}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-300">
+                      Belum ada course untuk jalur Mandatory Foundation.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <h4 className="text-base font-semibold text-white">Target Path (Aspirational)</h4>
+                    <p className="text-xs text-slate-300">
+                      Jalur minat Anda, disarankan setelah fondasi terpenuhi.
+                    </p>
+                  </div>
+                  {recommendationSplit.target.length ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {recommendationSplit.target.map(renderRecommendationCard)}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-300">Belum ada course untuk Target Path.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {recommendationSplit.target.map(renderRecommendationCard)}
+              </div>
+            )
           ) : (
             <p className="text-sm text-slate-300">Belum ada rekomendasi.</p>
           )}
