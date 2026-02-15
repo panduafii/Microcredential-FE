@@ -323,6 +323,7 @@ if (!result) return null;
   const scoreBadges = [
     { label: "Theoretical", value: breakdown.theoretical.score },
     { label: "Essay", value: breakdown.essay.score },
+    { label: "Profile", value: breakdown.profile.score },
   ];
 
   const renderRecommendationCard = (rec: Recommendation) => (
@@ -334,7 +335,7 @@ if (!result) return null;
         <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
           <span>Rank #{rec.rank}</span>
           <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-100">
-            {Math.round(rec.relevance_score * 100)} pts match
+            {Math.round(rec.relevance_score * 100)}% match
           </span>
         </div>
         <h4 className="text-lg font-semibold text-white">{rec.course_title}</h4>
@@ -430,7 +431,7 @@ if (!result) return null;
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {scoreBadges.map((item) => (
                 <div
                   key={item.label}
