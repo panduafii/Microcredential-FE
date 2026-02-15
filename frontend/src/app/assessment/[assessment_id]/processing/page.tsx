@@ -6,7 +6,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { ArrowRight, CheckCircle2, CircleDot, Loader2, RefreshCcw, Timer } from "lucide-react";
 
 interface Stage {
-  status: string;
+  status?: string;
   progress?: number;
   started_at?: string | null;
   completed_at?: string | null;
@@ -28,6 +28,68 @@ const STAGE_ORDER = [
   { key: "fusion_summary", label: "Fusion Summary" },
 ];
 
+const STAGE_KEYS = STAGE_ORDER.map((stage) => stage.key);
+type StageProgressMap = Record<string, number>;
+
+const clampProgress = (value: number): number => Math.max(0, Math.min(value, 100));
+const COMPLETED_STATUSES = new Set(["completed", "done", "success", "succeeded"]);
+const ACTIVE_STATUSES = new Set(["in_progress", "submitted", "running", "processing", "started"]);
+const FAILED_STATUSES = new Set(["failed", "error"]);
+
+const createZeroStageProgressMap = (): StageProgressMap =>
+  Object.fromEntries(STAGE_KEYS.map((key) => [key, 0])) as StageProgressMap;
+
+const normalizeStageStatus = (status?: string | null): string =>
+  (status || "queued").toLowerCase().replace(/\s+/g, "_");
+
+const hasStageSignal = (stage?: Stage): boolean => {
+  if (!stage) return false;
+
+  const normalizedStatus = normalizeStageStatus(stage.status);
+  return (
+    clampProgress(stage.progress || 0) > 0 ||
+    Boolean(stage.started_at) ||
+    Boolean(stage.completed_at) ||
+    COMPLETED_STATUSES.has(normalizedStatus) ||
+    ACTIVE_STATUSES.has(normalizedStatus) ||
+    FAILED_STATUSES.has(normalizedStatus)
+  );
+};
+
+const inferStageProgressFromOverall = (overallProgress: number): StageProgressMap => {
+  const normalizedOverall = clampProgress(overallProgress);
+  const totalStages = STAGE_KEYS.length;
+  const progressByStage = createZeroStageProgressMap();
+
+  STAGE_KEYS.forEach((key, index) => {
+    const stageStart = (index / totalStages) * 100;
+    const stageEnd = ((index + 1) / totalStages) * 100;
+    const stageRange = stageEnd - stageStart;
+    const withinStage = (normalizedOverall - stageStart) / stageRange;
+    progressByStage[key] = clampProgress(withinStage * 100);
+  });
+
+  return progressByStage;
+};
+
+const hasAssessmentReset = (data: StatusResponse): boolean => {
+  if (clampProgress(data.overall_progress || 0) > 0) return false;
+  if (data.status === "completed") return false;
+
+  const hasStartedStage = Object.values(data.stages || {}).some((stage) => {
+    const normalizedStatus = normalizeStageStatus(stage.status);
+    return (
+      clampProgress(stage.progress || 0) > 0 ||
+      ACTIVE_STATUSES.has(normalizedStatus) ||
+      COMPLETED_STATUSES.has(normalizedStatus) ||
+      Boolean(stage.started_at) ||
+      Boolean(stage.completed_at)
+    );
+  });
+
+  return !hasStartedStage;
+};
+
 export default function ProcessingPage() {
   const params = useParams<{ assessment_id: string }>();
   const router = useRouter();
@@ -36,46 +98,81 @@ export default function ProcessingPage() {
     : params.assessment_id;
 
   const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [targetOverallProgress, setTargetOverallProgress] = useState(0);
+  const [displayOverallProgress, setDisplayOverallProgress] = useState(0);
+  const [targetStageProgress, setTargetStageProgress] = useState<StageProgressMap>(
+    () => createZeroStageProgressMap(),
+  );
+  const [displayStageProgress, setDisplayStageProgress] = useState<StageProgressMap>(
+    () => createZeroStageProgressMap(),
+  );
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(true);
   const [startedAtMs, setStartedAtMs] = useState<number>(() => Date.now());
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  const overallProgress = useMemo(
-    () => status?.overall_progress || 0,
-    [status],
-  );
   const isBackendCompleted = status?.status === "completed";
-  const canViewResult = isBackendCompleted || overallProgress >= 100;
+  const canViewResult = isBackendCompleted || targetOverallProgress >= 100;
 
   const mappedStages = useMemo(() => {
     const stages = status?.stages || {};
-    return STAGE_ORDER.map((stage) => ({
-      ...stage,
-      data: stages[stage.key] || { status: "pending", progress: 0 },
-    }));
-  }, [status]);
+    return STAGE_ORDER.map((stage) => {
+      const stageData = stages[stage.key];
+      const targetProgress = clampProgress(targetStageProgress[stage.key] || 0);
+      const normalizedStatus = normalizeStageStatus(stageData?.status);
+
+      let derivedStatus = "queued";
+      if (
+        status?.status === "completed" ||
+        targetProgress >= 99.9 ||
+        COMPLETED_STATUSES.has(normalizedStatus)
+      ) {
+        derivedStatus = "completed";
+      } else if (FAILED_STATUSES.has(normalizedStatus)) {
+        derivedStatus = "failed";
+      } else if (ACTIVE_STATUSES.has(normalizedStatus) || targetProgress > 0) {
+        derivedStatus = "in_progress";
+      }
+
+      return {
+        ...stage,
+        data: {
+          ...stageData,
+          status: derivedStatus,
+          progress: targetProgress,
+        },
+      };
+    });
+  }, [status, targetStageProgress]);
 
   const getStageVisual = (statusText: string) => {
-    if (statusText === "completed") return { 
-      color: "text-emerald-100", 
-      bar: "bg-emerald-500",
-      bg: "bg-emerald-500/30",
-      border: "border-emerald-500/70"
-    };
+    if (statusText === "completed")
+      return {
+        color: "text-emerald-100",
+        bar: "bg-emerald-500",
+        bg: "bg-emerald-500/30",
+        border: "border-emerald-500/70",
+      };
+    if (statusText === "failed")
+      return {
+        color: "text-red-100",
+        bar: "bg-red-500",
+        bg: "bg-red-500/25",
+        border: "border-red-500/60",
+      };
     if (statusText === "in_progress" || statusText === "submitted")
-      return { 
-        color: "text-blue-100", 
+      return {
+        color: "text-blue-100",
         bar: "bg-blue-500",
         bg: "bg-blue-500/30",
-        border: "border-blue-500/70"
+        border: "border-blue-500/70",
       };
-    return { 
-      color: "text-slate-400", 
+    return {
+      color: "text-slate-400",
       bar: "bg-slate-600/50",
       bg: "bg-slate-500/5",
-      border: "border-slate-500/20"
+      border: "border-slate-500/20",
     };
   };
 
@@ -102,6 +199,15 @@ export default function ProcessingPage() {
       return;
     }
 
+    setStatus(null);
+    setError(null);
+    setStartedAtMs(Date.now());
+    setElapsedMs(0);
+    setTargetOverallProgress(0);
+    setDisplayOverallProgress(0);
+    setTargetStageProgress(createZeroStageProgressMap());
+    setDisplayStageProgress(createZeroStageProgressMap());
+
     isMounted.current = true;
     startPolling();
     return () => {
@@ -122,6 +228,68 @@ export default function ProcessingPage() {
     return () => clearInterval(interval);
   }, [startedAtMs]);
 
+  useEffect(() => {
+    let raf = 0;
+    const smoothFactor = isBackendCompleted ? 0.35 : 0.16;
+
+    const animate = () => {
+      setDisplayOverallProgress((previousProgress) => {
+        const diff = targetOverallProgress - previousProgress;
+        if (Math.abs(diff) < 0.2) {
+          return previousProgress === targetOverallProgress
+            ? previousProgress
+            : targetOverallProgress;
+        }
+
+        return clampProgress(previousProgress + diff * smoothFactor);
+      });
+
+      raf = requestAnimationFrame(animate);
+    };
+
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [isBackendCompleted, targetOverallProgress]);
+
+  useEffect(() => {
+    let raf = 0;
+    const smoothFactor = isBackendCompleted ? 0.35 : 0.16;
+
+    const animate = () => {
+      setDisplayStageProgress((previousProgress) => {
+        let hasChanges = false;
+        const nextProgress = { ...previousProgress };
+
+        for (const key of STAGE_KEYS) {
+          const target = targetStageProgress[key] || 0;
+          const current = previousProgress[key] || 0;
+          const diff = target - current;
+
+          if (Math.abs(diff) < 0.2) {
+            if (current !== target) {
+              nextProgress[key] = target;
+              hasChanges = true;
+            }
+            continue;
+          }
+
+          const updated = clampProgress(current + diff * smoothFactor);
+          if (updated !== current) {
+            nextProgress[key] = updated;
+            hasChanges = true;
+          }
+        }
+
+        return hasChanges ? nextProgress : previousProgress;
+      });
+
+      raf = requestAnimationFrame(animate);
+    };
+
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [isBackendCompleted, targetStageProgress]);
+
   // Poll status while processing.
   const startPolling = () => {
     const poll = async () => {
@@ -139,6 +307,63 @@ export default function ProcessingPage() {
 
         setStatus(data);
         setError(null);
+
+        const resetDetected = hasAssessmentReset(data);
+        const normalizedOverallProgress = clampProgress(data.overall_progress || 0);
+        const inferredStageProgress = inferStageProgressFromOverall(
+          data.status === "completed" ? 100 : normalizedOverallProgress,
+        );
+
+        setTargetOverallProgress((previousProgress) => {
+          if (resetDetected) {
+            return previousProgress === normalizedOverallProgress
+              ? previousProgress
+              : normalizedOverallProgress;
+          }
+          if (data.status === "completed") return 100;
+          return Math.max(previousProgress, normalizedOverallProgress);
+        });
+
+        setTargetStageProgress((previousProgress) => {
+          if (resetDetected) {
+            const isAlreadyZero = STAGE_KEYS.every((key) => (previousProgress[key] || 0) === 0);
+            return isAlreadyZero ? previousProgress : createZeroStageProgressMap();
+          }
+
+          let hasChanges = false;
+          const nextProgress = { ...previousProgress };
+          for (const key of STAGE_KEYS) {
+            const stage = data.stages?.[key];
+            const normalizedStatus = normalizeStageStatus(stage?.status);
+            const normalizedStageProgress = clampProgress(stage?.progress || 0);
+            const fallbackProgress = inferredStageProgress[key] || 0;
+            const hasSignal = hasStageSignal(stage);
+
+            let incomingTarget = fallbackProgress;
+            if (data.status === "completed" || COMPLETED_STATUSES.has(normalizedStatus)) {
+              incomingTarget = 100;
+            } else if (hasSignal) {
+              incomingTarget = Math.max(normalizedStageProgress, fallbackProgress);
+            }
+
+            const nextValue = Math.max(previousProgress[key] || 0, incomingTarget);
+
+            if (nextValue !== (previousProgress[key] || 0)) {
+              nextProgress[key] = nextValue;
+              hasChanges = true;
+            }
+          }
+
+          return hasChanges ? nextProgress : previousProgress;
+        });
+
+        if (resetDetected) {
+          setDisplayOverallProgress(normalizedOverallProgress);
+          setDisplayStageProgress((previousProgress) => {
+            const isAlreadyZero = STAGE_KEYS.every((key) => (previousProgress[key] || 0) === 0);
+            return isAlreadyZero ? previousProgress : createZeroStageProgressMap();
+          });
+        }
 
         const shouldAutoRedirect =
           data.overall_progress >= 100 ||
@@ -195,52 +420,56 @@ export default function ProcessingPage() {
           <div className="mt-6 space-y-3">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-200">
               <span>Overall progress</span>
-              <span>{overallProgress.toFixed(1)}%</span>
+              <span>{displayOverallProgress.toFixed(1)}%</span>
             </div>
             <div className="h-3 w-full overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-3 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-300 ease-out"
-                style={{ width: `${overallProgress}%` }}
+                style={{ width: `${displayOverallProgress}%` }}
               />
             </div>
           </div>
         </div>
 
         <section className="grid gap-4 sm:grid-cols-3">
-            {mappedStages.map((stage) => {
-              const statusText = stage.data.status || "pending";
-              const isDone = statusText === "completed";
-              const isActive = statusText === "in_progress" || statusText === "submitted";
-              const visual = getStageVisual(statusText);
+          {mappedStages.map((stage) => {
+            const statusText = stage.data.status || "queued";
+            const isDone = statusText === "completed";
+            const isFailed = statusText === "failed";
+            const isActive = statusText === "in_progress" || statusText === "submitted";
+            const visual = getStageVisual(statusText);
 
-              return (
-                <div
-                  key={stage.key}
-                  className={`rounded-2xl border p-4 shadow-lg transition-all duration-500 ${visual.border} ${visual.bg}`}
+            return (
+              <div
+                key={stage.key}
+                className={`rounded-2xl border p-4 shadow-lg transition-all duration-500 ${visual.border} ${visual.bg}`}
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-50">{stage.label}</h3>
                   {isDone ? (
                     <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  ) : isFailed ? (
+                    <CircleDot className="h-5 w-5 text-red-400" />
                   ) : isActive ? (
                     <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
                   ) : (
                     <CircleDot className="h-5 w-5 text-slate-500" />
                   )}
                 </div>
-                  <p className={`mt-2 text-xs font-semibold ${visual.color}`}>
-                    {isDone && "Completed"}
-                    {isActive && "In progress"}
-                    {!isDone && !isActive && "Queued"}
-                  </p>
-                  <div className="mt-3 h-2 w-full rounded-full bg-white/10">
-                    <div
-                      className={`h-2 rounded-full ${visual.bar} transition-all duration-300 ease-out`}
-                      style={{ width: `${Math.min(stage.data.progress || 0, 100)}%` }}
-                    />
-                  </div>
+                <p className={`mt-2 text-xs font-semibold ${visual.color}`}>
+                  {isDone && "Completed"}
+                  {isFailed && "Failed"}
+                  {isActive && "In progress"}
+                  {!isDone && !isFailed && !isActive && "Queued"}
+                </p>
+                <div className="mt-3 h-2 w-full rounded-full bg-white/10">
+                  <div
+                    className={`h-2 rounded-full ${visual.bar} transition-all duration-300 ease-out`}
+                    style={{ width: `${displayStageProgress[stage.key] || 0}%` }}
+                  />
                 </div>
-              );
+              </div>
+            );
           })}
         </section>
 
