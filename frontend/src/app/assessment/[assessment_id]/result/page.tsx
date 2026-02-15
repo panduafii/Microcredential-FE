@@ -321,8 +321,8 @@ if (!result) return null;
 
   const breakdown = result.score_breakdown;
   const scoreBadges = [
-    { label: "Theoretical", value: breakdown.theoretical.percentage },
-    { label: "Essay", value: breakdown.essay.percentage },
+    { label: "Theoretical", value: breakdown.theoretical.score },
+    { label: "Essay", value: breakdown.essay.score },
   ];
 
   const renderRecommendationCard = (rec: Recommendation) => (
@@ -334,7 +334,7 @@ if (!result) return null;
         <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
           <span>Rank #{rec.rank}</span>
           <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-100">
-            {Math.round(rec.relevance_score * 100)}% match
+            {Math.round(rec.relevance_score * 100)} pts match
           </span>
         </div>
         <h4 className="text-lg font-semibold text-white">{rec.course_title}</h4>
@@ -437,7 +437,7 @@ if (!result) return null;
                   className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-slate-50"
                 >
                   <p className="text-xs font-semibold text-slate-300">{item.label}</p>
-                  <p className="text-2xl font-bold text-white">{item.value}%</p>
+                  <p className="text-2xl font-bold text-white">{item.value.toFixed(1)} pts</p>
                 </div>
               ))}
             </div>
