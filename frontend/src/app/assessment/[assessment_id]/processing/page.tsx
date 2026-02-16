@@ -6,17 +6,27 @@ import { isAuthenticated } from "@/lib/auth";
 import { ArrowRight, CheckCircle2, CircleDot, Loader2, RefreshCcw, Timer } from "lucide-react";
 
 interface Stage {
+  name?: string;
   status?: string;
+  percentage?: number;
   progress?: number;
   started_at?: string | null;
   completed_at?: string | null;
+}
+
+interface JobProgress {
+  job_type: string;
+  status?: string;
+  progress_percentage?: number;
+  progress_step?: string;
 }
 
 interface StatusResponse {
   assessment_id: string;
   status: string;
   overall_progress: number;
-  stages?: Record<string, Stage>;
+  stages?: Record<string, Stage> | Stage[];
+  jobs?: JobProgress[];
   submitted_at?: string;
   completed_at?: string | null;
   degraded?: boolean;
@@ -27,6 +37,19 @@ const STAGE_ORDER = [
   { key: "rag_retrieval", label: "RAG Retrieval" },
   { key: "fusion_summary", label: "Fusion Summary" },
 ];
+const STAGE_TO_JOB_TYPE: Record<string, string> = {
+  gpt_scoring: "gpt",
+  rag_retrieval: "rag",
+  fusion_summary: "fusion",
+};
+const STAGE_KEY_ALIASES: Record<string, string> = {
+  gpt_scoring: "gpt_scoring",
+  gpt: "gpt_scoring",
+  rag_retrieval: "rag_retrieval",
+  rag: "rag_retrieval",
+  fusion_summary: "fusion_summary",
+  fusion: "fusion_summary",
+};
 
 const STAGE_KEYS = STAGE_ORDER.map((stage) => stage.key);
 type StageProgressMap = Record<string, number>;
@@ -35,6 +58,8 @@ const clampProgress = (value: number): number => Math.max(0, Math.min(value, 100
 const COMPLETED_STATUSES = new Set(["completed", "done", "success", "succeeded"]);
 const ACTIVE_STATUSES = new Set(["in_progress", "submitted", "running", "processing", "started"]);
 const FAILED_STATUSES = new Set(["failed", "error"]);
+const STAGE_COMPLETION_STEP_MS = 280;
+const REDIRECT_AFTER_COMPLETION_MS = 1500;
 
 const createZeroStageProgressMap = (): StageProgressMap =>
   Object.fromEntries(STAGE_KEYS.map((key) => [key, 0])) as StageProgressMap;
@@ -72,14 +97,58 @@ const inferStageProgressFromOverall = (overallProgress: number): StageProgressMa
   return progressByStage;
 };
 
+const normalizeIncomingStages = (
+  incomingStages?: StatusResponse["stages"],
+): Record<string, Stage> => {
+  const normalized: Record<string, Stage> = {};
+
+  if (Array.isArray(incomingStages)) {
+    for (const stage of incomingStages) {
+      const rawName = String(stage?.name || "").trim().toLowerCase();
+      const key = STAGE_KEY_ALIASES[rawName];
+      if (!key) continue;
+      normalized[key] = {
+        ...stage,
+        progress: stage?.progress ?? stage?.percentage ?? 0,
+      };
+    }
+    return normalized;
+  }
+
+  if (!incomingStages || typeof incomingStages !== "object") return normalized;
+
+  for (const [rawKey, stage] of Object.entries(incomingStages)) {
+    const key = STAGE_KEY_ALIASES[String(rawKey).toLowerCase()] || rawKey;
+    normalized[key] = {
+      ...stage,
+      progress: stage?.progress ?? stage?.percentage ?? 0,
+    };
+  }
+
+  return normalized;
+};
+
+const normalizeIncomingJobs = (incomingJobs?: JobProgress[]): Record<string, JobProgress> => {
+  const normalized: Record<string, JobProgress> = {};
+  if (!Array.isArray(incomingJobs)) return normalized;
+
+  for (const job of incomingJobs) {
+    if (!job?.job_type) continue;
+    normalized[String(job.job_type).toLowerCase()] = job;
+  }
+
+  return normalized;
+};
+
 const hasAssessmentReset = (data: StatusResponse): boolean => {
   if (clampProgress(data.overall_progress || 0) > 0) return false;
   if (data.status === "completed") return false;
+  const stages = normalizeIncomingStages(data.stages);
 
-  const hasStartedStage = Object.values(data.stages || {}).some((stage) => {
+  const hasStartedStage = Object.values(stages).some((stage) => {
     const normalizedStatus = normalizeStageStatus(stage.status);
     return (
-      clampProgress(stage.progress || 0) > 0 ||
+      clampProgress(stage.progress || stage.percentage || 0) > 0 ||
       ACTIVE_STATUSES.has(normalizedStatus) ||
       COMPLETED_STATUSES.has(normalizedStatus) ||
       Boolean(stage.started_at) ||
@@ -108,15 +177,50 @@ export default function ProcessingPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completionTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const completionSequenceStarted = useRef(false);
   const isMounted = useRef(true);
   const [startedAtMs, setStartedAtMs] = useState<number>(() => Date.now());
   const [elapsedMs, setElapsedMs] = useState(0);
 
   const isBackendCompleted = status?.status === "completed";
-  const canViewResult = isBackendCompleted || targetOverallProgress >= 100;
+  const canViewResult = targetOverallProgress >= 100 || displayOverallProgress >= 99.5;
+
+  const clearCompletionTimers = () => {
+    for (const timer of completionTimers.current) clearTimeout(timer);
+    completionTimers.current = [];
+  };
+
+  const runCompletionSequence = () => {
+    if (completionSequenceStarted.current) return;
+    completionSequenceStarted.current = true;
+    clearCompletionTimers();
+
+    STAGE_KEYS.forEach((key, index) => {
+      const timer = setTimeout(() => {
+        if (!isMounted.current) return;
+        setTargetStageProgress((previousProgress) => {
+          if ((previousProgress[key] || 0) >= 100) return previousProgress;
+          return { ...previousProgress, [key]: 100 };
+        });
+      }, index * STAGE_COMPLETION_STEP_MS);
+      completionTimers.current.push(timer);
+    });
+
+    const overallTimer = setTimeout(() => {
+      if (!isMounted.current) return;
+      setTargetOverallProgress(100);
+    }, STAGE_KEYS.length * STAGE_COMPLETION_STEP_MS);
+    completionTimers.current.push(overallTimer);
+
+    const redirectTimer = setTimeout(() => {
+      if (isMounted.current) router.replace(`/assessment/${assessmentId}/result`);
+    }, REDIRECT_AFTER_COMPLETION_MS);
+    completionTimers.current.push(redirectTimer);
+  };
 
   const mappedStages = useMemo(() => {
-    const stages = status?.stages || {};
+    const stages = normalizeIncomingStages(status?.stages);
     return STAGE_ORDER.map((stage) => {
       const stageData = stages[stage.key];
       const targetProgress = clampProgress(targetStageProgress[stage.key] || 0);
@@ -207,12 +311,15 @@ export default function ProcessingPage() {
     setDisplayOverallProgress(0);
     setTargetStageProgress(createZeroStageProgressMap());
     setDisplayStageProgress(createZeroStageProgressMap());
+    completionSequenceStarted.current = false;
+    clearCompletionTimers();
 
     isMounted.current = true;
     startPolling();
     return () => {
       isMounted.current = false;
       if (pollTimer.current) clearTimeout(pollTimer.current);
+      clearCompletionTimers();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId]);
@@ -308,11 +415,14 @@ export default function ProcessingPage() {
         setStatus(data);
         setError(null);
 
+        const normalizedStages = normalizeIncomingStages(data.stages);
+        const normalizedJobs = normalizeIncomingJobs(data.jobs);
         const resetDetected = hasAssessmentReset(data);
         const normalizedOverallProgress = clampProgress(data.overall_progress || 0);
-        const inferredStageProgress = inferStageProgressFromOverall(
-          data.status === "completed" ? 100 : normalizedOverallProgress,
-        );
+        const inferredStageProgress =
+          data.status === "completed"
+            ? createZeroStageProgressMap()
+            : inferStageProgressFromOverall(normalizedOverallProgress);
 
         setTargetOverallProgress((previousProgress) => {
           if (resetDetected) {
@@ -320,7 +430,7 @@ export default function ProcessingPage() {
               ? previousProgress
               : normalizedOverallProgress;
           }
-          if (data.status === "completed") return 100;
+          if (data.status === "completed") return previousProgress;
           return Math.max(previousProgress, normalizedOverallProgress);
         });
 
@@ -333,17 +443,31 @@ export default function ProcessingPage() {
           let hasChanges = false;
           const nextProgress = { ...previousProgress };
           for (const key of STAGE_KEYS) {
-            const stage = data.stages?.[key];
-            const normalizedStatus = normalizeStageStatus(stage?.status);
-            const normalizedStageProgress = clampProgress(stage?.progress || 0);
+            const stage = normalizedStages[key];
+            const job = normalizedJobs[STAGE_TO_JOB_TYPE[key]];
+            const normalizedStatus = normalizeStageStatus(stage?.status || job?.status);
+            const normalizedStageProgress = clampProgress(stage?.progress || stage?.percentage || 0);
+            const normalizedJobProgress = clampProgress(job?.progress_percentage || 0);
             const fallbackProgress = inferredStageProgress[key] || 0;
-            const hasSignal = hasStageSignal(stage);
+            const hasSignal =
+              hasStageSignal(stage) ||
+              normalizedJobProgress > 0 ||
+              ACTIVE_STATUSES.has(normalizeStageStatus(job?.status)) ||
+              COMPLETED_STATUSES.has(normalizeStageStatus(job?.status)) ||
+              FAILED_STATUSES.has(normalizeStageStatus(job?.status));
 
-            let incomingTarget = fallbackProgress;
-            if (data.status === "completed" || COMPLETED_STATUSES.has(normalizedStatus)) {
+            let incomingTarget = previousProgress[key] || 0;
+            if (
+              COMPLETED_STATUSES.has(normalizedStatus) ||
+              COMPLETED_STATUSES.has(normalizeStageStatus(job?.status))
+            ) {
               incomingTarget = 100;
-            } else if (hasSignal) {
-              incomingTarget = Math.max(normalizedStageProgress, fallbackProgress);
+            } else if (hasSignal || data.status !== "completed") {
+              incomingTarget = Math.max(
+                normalizedStageProgress,
+                normalizedJobProgress,
+                fallbackProgress,
+              );
             }
 
             const nextValue = Math.max(previousProgress[key] || 0, incomingTarget);
@@ -363,16 +487,12 @@ export default function ProcessingPage() {
             const isAlreadyZero = STAGE_KEYS.every((key) => (previousProgress[key] || 0) === 0);
             return isAlreadyZero ? previousProgress : createZeroStageProgressMap();
           });
+          completionSequenceStarted.current = false;
+          clearCompletionTimers();
         }
 
-        const shouldAutoRedirect =
-          data.overall_progress >= 100 ||
-          (data.status === "completed" && data.overall_progress >= 99);
-
-        if (shouldAutoRedirect) {
-          pollTimer.current = setTimeout(() => {
-            if (isMounted.current) router.replace(`/assessment/${assessmentId}/result`);
-          }, 800);
+        if (data.status === "completed") {
+          runCompletionSequence();
           return;
         }
 
