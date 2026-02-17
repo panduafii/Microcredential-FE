@@ -81,6 +81,7 @@ export default function ResultPage() {
     rating_relevance: 0,
     rating_acceptance: 0,
     comment: "",
+    item_ratings: {} as Record<string, number>,
   });
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -192,11 +193,29 @@ export default function ResultPage() {
     e.preventDefault();
     setSendingFeedback(true);
     try {
+      const surveyRecommendations = [...(result?.recommendations ?? [])]
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, 5);
+
+      const itemRatingsPayload = surveyRecommendations.map((rec) => {
+        const key = `${rec.rank}:${rec.course_id}`;
+        const score = feedback.item_ratings[key];
+        if (!Number.isInteger(score) || score < 0 || score > 2) {
+          throw new Error(`Please rate course #${rec.rank} (${rec.course_title}) with score 0-2.`);
+        }
+        return {
+          rank: rec.rank,
+          course_id: rec.course_id,
+          relevance_score_0_2: score,
+        };
+      });
+
       await api.post(
         `/assessments/${assessmentId}/feedback`,
         {
           rating_relevance: Number(feedback.rating_relevance),
           rating_acceptance: Number(feedback.rating_acceptance),
+          item_ratings: itemRatingsPayload.length > 0 ? itemRatingsPayload : undefined,
           comment: feedback.comment,
         },
         true,
@@ -290,6 +309,11 @@ export default function ResultPage() {
         result?.rag_traces?.readiness?.learning_paths,
       ),
     [result?.recommendations, result?.rag_traces?.readiness?.learning_paths],
+  );
+
+  const surveyRecommendations = useMemo(
+    () => [...(result?.recommendations ?? [])].sort((a, b) => a.rank - b.rank).slice(0, 5),
+    [result?.recommendations],
   );
 
   if (loading) {
@@ -473,6 +497,53 @@ if (!result) return null;
               </div>
             ) : (
               <form className="space-y-3" onSubmit={handleFeedbackSubmit}>
+                {surveyRecommendations.length > 0 && (
+                  <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                    <p className="text-sm font-semibold text-white">
+                      Per-course relevance (Top 5)
+                    </p>
+                    <p className="text-xs text-slate-300">
+                      Score each course: 0 = Not relevant, 1 = Somewhat relevant, 2 = Highly relevant.
+                    </p>
+                    <div className="space-y-2">
+                      {surveyRecommendations.map((rec) => {
+                        const key = `${rec.rank}:${rec.course_id}`;
+                        return (
+                          <label
+                            key={key}
+                            className="flex flex-col gap-1 rounded-lg border border-white/10 bg-white/5 p-2 text-xs text-slate-100"
+                          >
+                            <span className="font-semibold text-slate-100">
+                              #{rec.rank} {rec.course_title}
+                            </span>
+                            <select
+                              required
+                              value={feedback.item_ratings[key] ?? ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setFeedback((prev) => {
+                                  const nextItemRatings = { ...prev.item_ratings };
+                                  if (value === "") {
+                                    delete nextItemRatings[key];
+                                  } else {
+                                    nextItemRatings[key] = Number(value);
+                                  }
+                                  return { ...prev, item_ratings: nextItemRatings };
+                                });
+                              }}
+                              className="rounded-md border border-white/20 bg-slate-900 px-2 py-1 text-xs text-slate-100 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
+                            >
+                              <option value="">Select score</option>
+                              <option value={0}>0 - Not relevant</option>
+                              <option value={1}>1 - Somewhat relevant</option>
+                              <option value={2}>2 - Highly relevant</option>
+                            </select>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1 text-sm font-semibold text-slate-100">
                     Relevance (1-5)
