@@ -21,6 +21,12 @@ const TRACK_INFO: Record<string, { description: string }> = {
   },
   "data-analyst": {
     description: "Learn data analysis, visualization, SQL, Python for data science, and tools such as Pandas, Tableau, and Power BI"
+  },
+  "project-manager": {
+    description: "Learn project planning, stakeholder alignment, risk mitigation, delivery governance, and strategic leadership"
+  },
+  "cyber-security": {
+    description: "Learn security fundamentals, application and network security, incident response, and security architecture thinking"
   }
 };
 

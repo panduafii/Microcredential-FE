@@ -11,11 +11,14 @@ interface AuthResponse {
   tokens: AuthTokens;
 }
 
+const ALLOWED_REGISTER_ROLES = ["student", "advisor"] as const;
+type RegisterRole = (typeof ALLOWED_REGISTER_ROLES)[number];
+
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState("student");
+  const [role, setRole] = useState<RegisterRole>("student");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +29,9 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
     try {
+      if (!ALLOWED_REGISTER_ROLES.includes(role)) {
+        throw new Error("Invalid role for self-registration");
+      }
       const data = await api.post<AuthResponse>("/auth/register", {
         email,
         password,
@@ -163,11 +169,15 @@ export default function RegisterPage() {
                 <select
                   className="mt-1 w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-50 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40 [&>option]:bg-slate-800 [&>option]:text-slate-50"
                   value={role}
-                  onChange={(e) => setRole(e.target.value)}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    if (ALLOWED_REGISTER_ROLES.includes(selected as RegisterRole)) {
+                      setRole(selected as RegisterRole);
+                    }
+                  }}
                 >
                   <option value="student">Student</option>
                   <option value="advisor">Advisor</option>
-                  <option value="admin">Admin</option>
                 </select>
               </label>
             </div>
