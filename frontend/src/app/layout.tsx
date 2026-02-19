@@ -18,11 +18,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MicroCred | AI-Powered Assessment",
   description: "Assessment platform with GPT scoring and course recommendations",
-  icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
-  },
 };
 
 export default function RootLayout({
